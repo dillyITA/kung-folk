@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+
+# SO / editor
+.DS_Store
+.idea/
+.vscode/
+
+# capturas locais de teste
+*.png.tmp
