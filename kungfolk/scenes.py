@@ -9,6 +9,7 @@ from .engine import (Fighter, HumanController, Projectile, InputFrame,
 from .characters import CHARACTERS, draw_projectile
 from .stage import ForestStage
 from .ai import CPUController
+from . import sprites
 
 K = pygame.K_RETURN
 
@@ -16,7 +17,7 @@ K = pygame.K_RETURN
 def draw_preview(surf, fighter):
     """Desenha um lutador 'vivo' fora da luta (título/seleção/resultado)."""
     fighter.anim += 1
-    fighter.char.draw(surf, fighter)
+    sprites.render(surf, fighter)
 
 
 # ---------------------------------------------------------------- título
@@ -426,7 +427,7 @@ class FightScene:
         order = sorted(self.fighters(),
                        key=lambda f: 1 if f.state in (ATTACK, SPECIAL) else 0)
         for f in order:
-            f.char.draw(cv, f)
+            sprites.render(cv, f)
         for pr in self.projectiles:
             draw_projectile(cv, pr)
         self.particles.draw(cv)

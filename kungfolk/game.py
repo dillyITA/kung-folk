@@ -13,6 +13,9 @@ class Game:
         self.sounds = SoundBank()
         self.vintage = Vintage()
         self.running = True
+        from . import sprites
+        from .characters import CHARACTERS
+        sprites.load_all(CHARACTERS)          # usa sprites onde houver PNGs
         from .scenes import TitleScene
         self.scene = TitleScene(self)
 

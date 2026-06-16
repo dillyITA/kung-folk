@@ -549,16 +549,19 @@ class CharacterDef:
     draw: object
     portrait: object
     accent: tuple
+    sprite_dir: str = ''      # subpasta em assets/sprites/ (vazio = só procedural)
+    sprites: object = None    # SpriteSet carregado em runtime, se houver PNGs
 
 
 SACI = CharacterDef('SACI-PERERÊ', 'O Travesso do Redemoinho',
                     hp=95, speed=3.4, jump=-13.2,
                     moves=saci_moves(), draw=draw_saci,
-                    portrait=saci_portrait, accent=C.RED)
+                    portrait=saci_portrait, accent=C.RED, sprite_dir='saci')
 
 CURUPIRA = CharacterDef('CURUPIRA', 'O Guardião da Mata',
                         hp=110, speed=2.7, jump=-12.2,
                         moves=curupira_moves(), draw=draw_curupira,
-                        portrait=curupira_portrait, accent=C.FIRE_1)
+                        portrait=curupira_portrait, accent=C.FIRE_1,
+                        sprite_dir='curupira')
 
 CHARACTERS = [SACI, CURUPIRA]
