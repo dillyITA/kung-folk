@@ -3,6 +3,29 @@
 Coloque aqui os PNGs por personagem. O jogo usa o sprite onde existir e cai no
 desenho **procedural** para o resto — dá pra migrar uma animação por vez.
 
+## Dois jeitos de trazer arte
+
+**A) Folha única rotulada (o que usamos)** — uma imagem com várias linhas, cada
+uma com um rótulo à esquerda (`IDLE (6)`, `WALK (6)`…) e fundo magenta. Converta
+em strips com o importador:
+
+```
+.venv/bin/python tools/import_sheet.py assets/sprites/saci/_sheet_raw.png saci
+```
+
+Ele detecta as linhas pelos rótulos, descarta o texto, fatia cada animação e
+reconcilia com a contagem conhecida (junta figuras partidas / divide as que se
+encostam). A ordem/contagem das linhas vem de `tools/import_sheet.py`
+(`DEFAULT_LAYOUT`); para uma folha diferente, crie `<char>/layout.txt` com uma
+linha `nome contagem` por animação.
+
+**B) Um PNG por animação** — se preferir, salve cada animação como arquivo
+separado (formato abaixo). O runtime aceita os dois (fundo magenta OU já
+transparente).
+
+> Arquivos com `_` no início (ex.: `_sheet_raw.png`, `_model_sheet.png`) são
+> tratados como fonte/referência e **ignorados** pelo jogo.
+
 ```
 assets/sprites/
   saci/

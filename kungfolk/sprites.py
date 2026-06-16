@@ -77,6 +77,23 @@ def resolve(f):
 
 
 # ---------------- chroma-key + fatiamento ----------------
+def dominant_bg(rgb):
+    """Cor de fundo = cor mais comum (quantizada). Robusta a screenshots com
+    borda e a magenta que não seja exatamente #FF00FF."""
+    import numpy as np
+    q = (rgb.reshape(-1, 3) // 16 * 16).astype(np.int32)
+    keys = q[:, 0] * 65536 + q[:, 1] * 256 + q[:, 2]
+    v, c = np.unique(keys, return_counts=True)
+    k = int(v[c.argmax()])
+    return np.array([(k >> 16) & 255, (k >> 8) & 255, k & 255])
+
+
+def alpha_from_bg(rgb, bg, tol=80, edge=28):
+    import numpy as np
+    dist = np.sqrt(((rgb - bg) ** 2).sum(axis=2))
+    return (np.clip((dist - tol) / edge, 0, 1) * 255).astype(np.uint8)
+
+
 def _runs(col, gap_min, min_w):
     """Segmenta um vetor booleano de colunas em corridas de conteúdo,
     fundindo lacunas menores que gap_min e descartando fragmentos < min_w."""
@@ -100,16 +117,17 @@ def _runs(col, gap_min, min_w):
 
 
 def chroma_slice(path, tol=72, edge=28):
-    """Carrega um PNG de fundo magenta e devolve a lista de frames recortados
-    (cada um com alpha e cortado no bounding box do conteúdo)."""
+    """Carrega um strip (fundo magenta OU já transparente) e devolve a lista de
+    frames recortados — cada um com alpha e cortado no bounding box."""
     import numpy as np
     img = pygame.image.load(path).convert_alpha()
     w, h = img.get_size()
-    rgb = pygame.surfarray.array3d(img).astype(np.int16)          # (w, h, 3)
-    corners = np.array([rgb[0, 0], rgb[w - 1, 0], rgb[0, h - 1], rgb[w - 1, h - 1]])
-    bg = np.median(corners, axis=0)
-    dist = np.sqrt(((rgb - bg) ** 2).sum(axis=2))                 # (w, h)
-    alpha = (np.clip((dist - tol) / edge, 0, 1) * 255).astype(np.uint8)
+    pre = pygame.surfarray.array_alpha(img)                       # (w, h)
+    if (pre < 16).mean() > 0.04:                                  # já vem keyado
+        alpha = pre.copy()
+    else:
+        rgb = pygame.surfarray.array3d(img).astype(np.int16)      # (w, h, 3)
+        alpha = alpha_from_bg(rgb, dominant_bg(rgb), tol, edge)
     fg = alpha > 40
     cols = fg.any(axis=1)
     frames = []
