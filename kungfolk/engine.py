@@ -239,7 +239,15 @@ class Fighter:
                 self.vx *= 0.8
                 if self.frame >= self.down_until:
                     self.set_state(IDLE)
-                    self.invuln = 24
+                    self.invuln = 28
+            # rede de segurança: levanta à força após um teto de tempo, mesmo
+            # que down_until nunca tenha sido fixado (evita ficar caído pra
+            # sempre num caminho raro).
+            if self.state == KNOCKDOWN and self.frame >= 160:
+                self.y = C.FLOOR_Y
+                self.vy = 0
+                self.set_state(IDLE)
+                self.invuln = 28
         elif st in (KO, WIN):
             self.vx *= 0.8
         elif st in (ATTACK, SPECIAL):
