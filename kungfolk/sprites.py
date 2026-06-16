@@ -120,7 +120,10 @@ def chroma_slice(path, tol=72, edge=28):
     """Carrega um strip (fundo magenta OU já transparente) e devolve a lista de
     frames recortados — cada um com alpha e cortado no bounding box."""
     import numpy as np
-    img = pygame.image.load(path).convert_alpha()
+    # NÃO usar convert_alpha(): em algumas combinações de SDL/macOS (cocoa) o
+    # blit de surfaces convertidas sai como bloco branco. A surface crua do PNG
+    # já traz alpha e blita corretamente.
+    img = pygame.image.load(path)
     w, h = img.get_size()
     pre = pygame.surfarray.array_alpha(img)                       # (w, h)
     if (pre < 16).mean() > 0.04:                                  # já vem keyado

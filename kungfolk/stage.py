@@ -1,9 +1,25 @@
-"""Cenário: clareira na mata em 'aquarela' — manchas translúcidas sobrepostas,
-sem contorno de tinta (só os personagens têm tinta, como no Cuphead)."""
+"""Cenário: clareira na mata, estilo cartoon vintage de ALTO CONTRASTE —
+troncos e copa escuros e opacos com contorno de tinta, pra ler bem na tela
+(a versão aquarela pálida anterior sumia contra a vinheta)."""
 import math
 import random
 import pygame
 from . import config as C
+
+# paleta dedicada do cenário (mais saturada/escura que a base)
+SKY_TOP = (228, 206, 158)
+SKY_BOT = (198, 170, 120)
+HILL_FAR = (150, 152, 104)
+HILL_NEAR = (118, 130, 78)
+MATA = (66, 80, 44)          # massa de mata atrás dos troncos
+TRUNK = (104, 70, 42)
+TRUNK_SH = (78, 50, 30)      # lado sombreado do tronco
+CANOPY = (58, 74, 42)
+CANOPY_HI = (84, 100, 58)
+GROUND = (92, 108, 60)
+GROUND_DK = (70, 84, 46)
+GRASS = (132, 142, 88)
+BEAM = (250, 240, 200)
 
 
 class ForestStage:
@@ -16,100 +32,87 @@ class ForestStage:
                        self.rng.uniform(0.2, 0.7), self.rng.uniform(0, 6.3))
                       for _ in range(12)]
 
-    def _smudge(self, layer, cx, cy, rx, ry, color, alpha=30, n=5):
-        """Mancha aquarela: elipses translúcidas levemente deslocadas."""
-        rng = self.rng
-        for _ in range(n):
-            w = int(rx * 2 * rng.uniform(0.78, 1.15))
-            h = int(ry * 2 * rng.uniform(0.78, 1.15))
-            r = pygame.Rect(0, 0, max(4, w), max(4, h))
-            r.center = (int(cx + rng.uniform(-rx, rx) * 0.14),
-                        int(cy + rng.uniform(-ry, ry) * 0.14))
-            pygame.draw.ellipse(layer, (color[0], color[1], color[2], alpha), r)
+    def _ink_poly(self, s, pts, color, w=3):
+        pts = [(int(x), int(y)) for x, y in pts]
+        pygame.draw.polygon(s, color, pts)
+        pygame.draw.polygon(s, C.INK, pts, w)
+
+    def _ink_circle(self, s, c, r, color, w=3):
+        pygame.draw.circle(s, color, (int(c[0]), int(c[1])), int(r))
+        pygame.draw.circle(s, C.INK, (int(c[0]), int(c[1])), int(r), w)
 
     def _build(self):
         rng = self.rng
         s = pygame.Surface((C.WIDTH, C.HEIGHT))
-        # céu: lavagem em degradê creme → pêssego
+        # céu em degradê quente
         for y in range(C.HEIGHT):
             k = y / C.HEIGHT
-            col = (int(242 - 30 * k), int(232 - 44 * k), int(206 - 58 * k))
+            col = tuple(int(SKY_TOP[i] + (SKY_BOT[i] - SKY_TOP[i]) * k) for i in range(3))
             pygame.draw.line(s, col, (0, y), (C.WIDTH, y))
-        wash = pygame.Surface((C.WIDTH, C.HEIGHT), pygame.SRCALPHA)
-        # sol aguado
-        self._smudge(wash, 195, 125, 95, 92, (238, 212, 152), 22, 4)
-        self._smudge(wash, 195, 125, 56, 54, (248, 230, 170), 36, 3)
-        # morros distantes (verde acinzentado, perspectiva atmosférica)
-        for cx, cy, rx, ry in ((150, 505, 360, 150), (540, 515, 430, 175),
-                               (880, 505, 340, 145)):
-            self._smudge(wash, cx, cy, rx, ry, (164, 168, 122), 34, 6)
-        # massas de mata atrás dos troncos
-        for cx in range(-40, C.WIDTH + 80, 140):
-            self._smudge(wash, cx, C.FLOOR_Y - 16 + rng.randint(-12, 12),
-                         120, 80 + rng.randint(0, 30), (110, 122, 76), 42, 6)
-        # troncos suaves, pintados (sem contorno)
-        trunks = []
-        for i in range(6):
-            x = 60 + i * 172 + rng.randint(-26, 26)
-            w = rng.randint(26, 42)
-            sway = rng.randint(-16, 18)
-            trunks.append((x, w, sway))
-            pts = [(x - w // 2, C.FLOOR_Y + 8), (x + w // 2, C.FLOOR_Y + 8),
-                   (x + w // 3 + sway, 64), (x - w // 3 + sway, 56)]
-            pygame.draw.polygon(wash, (108, 80, 54, 170), pts)
-            pygame.draw.polygon(wash, (84, 62, 44, 90),
-                                [(p[0] + w // 4, p[1]) for p in pts])
-        # tufos de folhagem agarrados aos troncos (na altura da copa)
-        for x, w, sway in trunks:
-            for side in (-1, 1):
-                bx = x + sway // 2 + side * (w // 2 + rng.randint(10, 34))
-                by = rng.randint(70, 150)
-                self._smudge(wash, bx, by, 52, 30, (96, 110, 66), 44, 4)
-                self._smudge(wash, bx + side * 14, by + 16, 34, 20,
-                             (118, 130, 78), 34, 3)
-        # copa no topo: faixa densa de folhagem
-        for x in range(-30, C.WIDTH + 60, 70):
-            self._smudge(wash, x, 8 + rng.randint(-8, 8), 92, 66, (78, 92, 52), 54, 6)
-            self._smudge(wash, x + 30, 46, 60, 40, (100, 114, 66), 40, 4)
-        # feixes de luz descendo
-        for lx in (330, 620):
-            beam = [(lx - 26, 0), (lx + 30, 0), (lx + 120, C.FLOOR_Y),
-                    (lx + 30, C.FLOOR_Y)]
-            pygame.draw.polygon(wash, (250, 238, 190, 22), beam)
-        s.blit(wash, (0, 0))
-        # chão pintado
-        pygame.draw.rect(s, (99, 107, 64), (0, C.FLOOR_Y + 8, C.WIDTH, C.HEIGHT))
-        gw = pygame.Surface((C.WIDTH, C.HEIGHT), pygame.SRCALPHA)
-        for _ in range(26):
-            gx = rng.randint(0, C.WIDTH)
-            gy = rng.randint(C.FLOOR_Y + 12, C.HEIGHT)
-            col = rng.choice(((70, 78, 48), (126, 132, 84), (88, 96, 58)))
-            self._smudge(gw, gx, gy, rng.randint(30, 90), rng.randint(6, 14),
-                         col, 30, 3)
-        s.blit(gw, (0, 0))
-        # linha do chão suave (referência de palco)
-        pygame.draw.line(s, (62, 68, 42), (0, C.FLOOR_Y + 8), (C.WIDTH, C.FLOOR_Y + 8), 3)
-        # tufos de capim soltos
-        for _ in range(40):
+        # sol pálido
+        self._ink_circle(s, (190, 120), 52, (236, 214, 158), 0)
+        # morros distantes (opacos, contorno suave)
+        for cx, cy, rx, ry, col in ((150, 500, 360, 150, HILL_FAR),
+                                    (560, 520, 440, 180, HILL_NEAR),
+                                    (900, 500, 340, 150, HILL_FAR)):
+            r = pygame.Rect(cx - rx, cy - ry, rx * 2, ry * 2)
+            pygame.draw.ellipse(s, col, r)
+        # massa escura de mata na faixa dos troncos
+        pygame.draw.rect(s, MATA, (0, 70, C.WIDTH, C.FLOOR_Y - 70 + 8))
+        # feixes de luz (camada translúcida)
+        beams = pygame.Surface((C.WIDTH, C.HEIGHT), pygame.SRCALPHA)
+        for lx in (330, 660):
+            pygame.draw.polygon(beams, (BEAM[0], BEAM[1], BEAM[2], 46),
+                                [(lx - 30, 70), (lx + 34, 70),
+                                 (lx + 130, C.FLOOR_Y), (lx + 26, C.FLOOR_Y)])
+        s.blit(beams, (0, 0))
+        # troncos escuros e opacos, com contorno de tinta
+        for i in range(5):
+            x = 110 + i * 200 + rng.randint(-30, 30)
+            w = rng.randint(40, 58)
+            sway = rng.randint(-14, 16)
+            self._ink_poly(s, [(x - w // 2, C.FLOOR_Y + 8), (x + w // 2, C.FLOOR_Y + 8),
+                               (x + w // 3 + sway, 96), (x - w // 3 + sway, 84)], TRUNK)
+            # lado sombreado
+            pygame.draw.polygon(s, TRUNK_SH,
+                                [(x + w // 6, C.FLOOR_Y + 8), (x + w // 2, C.FLOOR_Y + 8),
+                                 (x + w // 3 + sway, 96), (x + sway, 90)])
+            # cascas
+            for _ in range(3):
+                yy = rng.randint(160, 420)
+                pygame.draw.arc(s, C.INK, pygame.Rect(x - w // 2, yy, w, 22), 3.4, 6.0, 2)
+        # copa densa no topo: festão de círculos escuros com contorno
+        for x in range(-30, C.WIDTH + 60, 84):
+            r = 66 + rng.randint(-10, 12)
+            self._ink_circle(s, (x, 26), r, CANOPY)
+            self._ink_circle(s, (x + 30, 20), int(r * 0.6), CANOPY_HI, 0)
+        # arbustos na base dos troncos
+        for x in range(-10, C.WIDTH + 40, 130):
+            r = 34 + rng.randint(-6, 12)
+            self._ink_circle(s, (x + rng.randint(-12, 12), C.FLOOR_Y + 6), r, HILL_NEAR)
+        # chão
+        pygame.draw.rect(s, GROUND, (0, C.FLOOR_Y + 8, C.WIDTH, C.HEIGHT))
+        pygame.draw.rect(s, GROUND_DK, (0, C.HEIGHT - 60, C.WIDTH, 60))
+        pygame.draw.line(s, C.INK, (0, C.FLOOR_Y + 8), (C.WIDTH, C.FLOOR_Y + 8), 4)
+        for _ in range(48):
             x = rng.randint(0, C.WIDTH)
-            y = rng.randint(C.FLOOR_Y + 16, C.HEIGHT - 6)
-            for d in (-4, 0, 4):
-                pygame.draw.line(s, (130, 136, 88), (x, y),
-                                 (x + d, y - rng.randint(6, 13)), 2)
+            y = rng.randint(C.FLOOR_Y + 16, C.HEIGHT - 8)
+            for d in (-5, 0, 5):
+                pygame.draw.line(s, GRASS, (x, y), (x + d, y - rng.randint(8, 16)), 2)
         return s
 
     def draw(self, surf, t):
         surf.blit(self.base, (0, 0))
-        # cipós balançando (pintados, sem tinta)
+        # cipós balançando
         for i, x0 in enumerate((250, 700)):
             sway = math.sin(t * 0.02 + i * 2.4) * 16
-            pts = [(x0 + sway * (y / 180.0) ** 2, 70 + y) for y in range(0, 181, 30)]
-            pygame.draw.lines(surf, (78, 90, 54), False,
+            pts = [(x0 + sway * (y / 180.0) ** 2, 60 + y) for y in range(0, 181, 30)]
+            pygame.draw.lines(surf, CANOPY, False,
                               [(int(a), int(b)) for a, b in pts], 6)
             end = pts[-1]
-            pygame.draw.circle(surf, (104, 118, 68), (int(end[0]), int(end[1]) + 8), 10)
+            self._ink_circle(surf, (end[0], end[1] + 8), 11, CANOPY_HI)
         # vagalumes / poeira dourada
-        for i, (x, y, sp, ph) in enumerate(self.motes):
+        for (x, y, sp, ph) in self.motes:
             mx = (x + t * sp) % (C.WIDTH + 40) - 20
             my = y + math.sin(t * 0.03 + ph) * 14
             pygame.draw.circle(surf, C.GOLD, (int(mx), int(my)), 2)
