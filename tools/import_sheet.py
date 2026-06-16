@@ -125,10 +125,22 @@ def main():
         name, count = layout[i]
         a = max(0, center - 46) if i > 0 else 0
         b = (labels[i + 1] - 46) if i + 1 < len(labels) else h
-        band = fg[:, a:b]
+        band = fg[:, a:b].copy()
         rowh = b - a
-        # FIGURA: coluna com conteúdo na metade de baixo da linha (o rótulo,
-        # texto colado no topo, é assim descartado mesmo quando é largo).
+        # APAGA O RÓTULO: texto fica numa faixa fina em torno do y do rótulo,
+        # da esquerda até o 1º vão grande (as figuras começam depois). Funciona
+        # com o rótulo acima das figuras (folha 1) ou ao lado delas (folha 2).
+        sy0, sy1 = max(0, center - 40 - a), min(rowh, center + 40 - a)
+        sx = np.where(band[:, sy0:sy1].any(axis=1))[0]
+        if len(sx):
+            lr, prev = sx[-1] + 1, sx[0]
+            for x in sx[1:]:
+                if x - prev - 1 >= 32:
+                    lr = prev + 1
+                    break
+                prev = x
+            band[:lr, sy0:sy1] = False
+        # FIGURA: coluna com conteúdo na metade de baixo da linha.
         lower = int(rowh * 0.42)
         fig_col = band[:, lower:].any(axis=1)
         runs = col_runs(fig_col, gap_min=max(8, w // 110), min_w=max(20, w // 90))
