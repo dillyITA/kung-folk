@@ -18,6 +18,17 @@ ASSET_ROOT = os.path.join(
 
 TARGET_H = 156  # altura do personagem em tela (px) — casa com o procedural
 
+# Alvo de altura do NÚCLEO (corpo denso) em tela, por animação. As folhas
+# geradas desenham cada linha num tamanho diferente; normalizar por aqui mantém
+# o personagem com tamanho consistente (em pé = cheio; agachado/deitado = menor).
+CORE_BODY = 150
+POSE_CORE = {
+    'idle': CORE_BODY, 'walk': CORE_BODY, 'jump': 148, 'crouch': 116,
+    'punch': CORE_BODY, 'crouch_punch': 116, 'kick': CORE_BODY, 'air_kick': 144,
+    'special_p': CORE_BODY, 'special_k': CORE_BODY, 'hitstun': 148,
+    'block': 120, 'knockdown': 92, 'ko': 56, 'win': CORE_BODY,
+}
+
 # animações reconhecidas. loop=True cicla pelo tempo no fps indicado.
 ANIMS = {
     'idle':         dict(loop=True, fps=8),
@@ -148,6 +159,18 @@ def chroma_slice(path, tol=72, edge=28):
     return frames
 
 
+def _core_height(surf):
+    """Altura do núcleo denso (corpo), ignorando wisps esparsos (fogo, fumaça,
+    estrelas, smear) que inflam o bounding box de forma inconsistente."""
+    import numpy as np
+    a = pygame.surfarray.array_alpha(surf)
+    m = (a > 40).sum(axis=0).astype(float)        # massa de pixels por linha y
+    if m.max() == 0:
+        return surf.get_height()
+    rows = np.where(m > 0.20 * m.max())[0]
+    return int(rows[-1] - rows[0] + 1) if len(rows) else surf.get_height()
+
+
 def slice_by_bounds(path, bounds):
     """Fatia um strip usando as fronteiras [x, largura] exatas gravadas pelo
     importador — robusto a vãos internos da figura. Recorta cada frame no bbox."""
@@ -191,10 +214,12 @@ class SpriteSet:
                     raw[name] = fr
         if not raw:
             return
-        ref = raw.get('idle') or next(iter(raw.values()))
-        ref_h = max((f.get_height() for f in ref), default=TARGET_H)
-        scale = TARGET_H / ref_h if ref_h else 1.0
+        # escala POR ANIMAÇÃO: o núcleo (corpo denso) de cada animação vai para
+        # o alvo da sua pose, então o personagem fica do mesmo tamanho em todas.
         for name, fr in raw.items():
+            cores = sorted(_core_height(f) for f in fr)
+            med = cores[len(cores) // 2] or 1
+            scale = POSE_CORE.get(name, CORE_BODY) / med
             self.anims[name] = [self._scaled(f, scale) for f in fr]
 
     @staticmethod
