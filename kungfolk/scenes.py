@@ -419,6 +419,7 @@ class FightScene:
         cv = self.canvas
         cv.fill(C.PAPER)
         self.stage.draw(cv, self.t)
+        self.stage.draw_front(cv, self.t)   # folhagem ATRÁS dos lutadores
         # sombras
         for f in self.fighters():
             h = C.FLOOR_Y - f.y
@@ -433,7 +434,6 @@ class FightScene:
         for pr in self.projectiles:
             draw_projectile(cv, pr)
         self.particles.draw(cv)
-        self.stage.draw_front(cv, self.t)   # folhagem da frente (emoldura a luta)
         self._draw_hud(cv)
         self._draw_messages(cv)
         # tremor de tela
