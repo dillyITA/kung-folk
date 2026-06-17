@@ -2,9 +2,14 @@
 troncos e copa escuros e opacos com contorno de tinta, pra ler bem na tela
 (a versão aquarela pálida anterior sumia contra a vinheta)."""
 import math
+import os
 import random
 import pygame
 from . import config as C
+
+STAGES_ROOT = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    'assets', 'sprites', 'stages')
 
 # paleta dedicada do cenário (mais saturada/escura que a base)
 SKY_TOP = (228, 206, 158)
@@ -116,3 +121,72 @@ class ForestStage:
             mx = (x + t * sp) % (C.WIDTH + 40) - 20
             my = y + math.sin(t * 0.03 + ph) * 14
             pygame.draw.circle(surf, C.GOLD, (int(mx), int(my)), 2)
+
+    def draw_front(self, surf, t):
+        pass   # cenário procedural não tem camada de frente
+
+
+class JungleStage:
+    """Cenário em imagem: fundo estático + camada de frente (folhagem) animada
+    com balanço. A frente fica NA FRENTE dos lutadores, emoldurando a luta."""
+    name = 'SELVA'
+
+    def __init__(self, folder):
+        back = pygame.image.load(os.path.join(folder, 'fundo.png'))
+        self.back = pygame.transform.smoothscale(back, (C.WIDTH, C.HEIGHT))
+        keyed = os.path.join(folder, 'frente_keyed.png')
+        if not os.path.exists(keyed):
+            self._make_keyed(os.path.join(folder, 'frente.png'), keyed)
+        front = pygame.transform.smoothscale(
+            pygame.image.load(keyed), (C.WIDTH, C.HEIGHT))
+        # divide na faixa vazia do meio: cipós (cima) balançam mais que as
+        # plantas (baixo). O corte cai onde não há folhagem -> sem emenda.
+        self.mid = int(C.HEIGHT * 0.46)
+        self.front_top = front.subsurface((0, 0, C.WIDTH, self.mid)).copy()
+        self.front_bot = front.subsurface(
+            (0, self.mid, C.WIDTH, C.HEIGHT - self.mid)).copy()
+        self.motes = [(random.uniform(0, C.WIDTH), random.uniform(120, 380),
+                       random.uniform(0.15, 0.5), random.uniform(0, 6.3))
+                      for _ in range(10)]
+
+    @staticmethod
+    def _make_keyed(src, dst):
+        import numpy as np
+        from . import sprites as SP
+        img = pygame.image.load(src)
+        rgb = pygame.surfarray.array3d(img).astype(np.int16)
+        alpha = SP.alpha_from_bg(rgb, SP.dominant_bg(rgb), tol=95, edge=32)
+        out = pygame.Surface(img.get_size(), pygame.SRCALPHA)
+        r3 = pygame.surfarray.pixels3d(out)
+        r3[:] = pygame.surfarray.array3d(img)
+        del r3
+        pa = pygame.surfarray.pixels_alpha(out)
+        pa[:] = alpha
+        del pa
+        pygame.image.save(out, dst)
+
+    def draw(self, surf, t):
+        surf.blit(self.back, (0, 0))
+        for (x, y, sp, ph) in self.motes:       # poeira dourada na luz
+            mx = (x + t * sp) % (C.WIDTH + 40) - 20
+            my = y + math.sin(t * 0.03 + ph) * 12
+            pygame.draw.circle(surf, C.GOLD, (int(mx), int(my)), 2)
+
+    def draw_front(self, surf, t):
+        sx_t = math.sin(t * 0.018) * 6           # cipós no topo: balanço maior
+        sy_t = math.sin(t * 0.012) * 2
+        sx_b = math.sin(t * 0.018 + 0.7) * 2.5   # plantas embaixo: balanço sutil
+        surf.blit(self.front_top, (int(sx_t), int(sy_t)))
+        surf.blit(self.front_bot, (int(sx_b), self.mid))
+
+
+def load_stage():
+    """Usa o cenário em imagem da selva se os arquivos existirem; senão, o
+    cenário procedural."""
+    selva = os.path.join(STAGES_ROOT, 'selva')
+    if os.path.exists(os.path.join(selva, 'fundo.png')):
+        try:
+            return JungleStage(selva)
+        except Exception as e:
+            print('[stage] falha ao carregar selva: %s' % e)
+    return ForestStage()

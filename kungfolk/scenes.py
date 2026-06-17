@@ -7,7 +7,7 @@ from . import fx
 from .engine import (Fighter, HumanController, Projectile, InputFrame,
                      IDLE, WALK, CROUCH, ATTACK, SPECIAL, KO, WIN, KNOCKDOWN)
 from .characters import CHARACTERS, draw_projectile
-from .stage import ForestStage
+from .stage import ForestStage, load_stage
 from .ai import CPUController
 from . import sprites
 
@@ -28,7 +28,7 @@ class TitleScene:
         from .characters import SACI, CURUPIRA
         self.pv1 = Fighter(SACI, 190, 1, None)
         self.pv2 = Fighter(CURUPIRA, 770, -1, None)
-        self.stage = ForestStage()
+        self.stage = load_stage()
 
     def update(self, pressed, keys):
         self.t += 1
@@ -65,7 +65,7 @@ class ModeScene:
         self.g = game
         self.t = 0
         self.sel = 0
-        self.stage = stage or ForestStage()
+        self.stage = stage or load_stage()
 
     def update(self, pressed, keys):
         self.t += 1
@@ -112,7 +112,7 @@ class SelectScene:
         self.t = 0
         self.sel = [0, 1]
         self.locked = [False, False]
-        self.stage = ForestStage()
+        self.stage = load_stage()
         self.previews = [Fighter(ch, 0, 1, None) for ch in CHARACTERS]
         self.start_delay = 0
 
@@ -200,7 +200,7 @@ class FightScene:
         self.c1, self.c2 = c1, c2
         self.ctrl1, self.ctrl2 = ctrl1, ctrl2
         self.names = names
-        self.stage = ForestStage()
+        self.stage = load_stage()
         self.particles = fx.Particles()
         self.canvas = pygame.Surface((C.WIDTH, C.HEIGHT))
         self.shadow_img = fx.make_shadow()
@@ -433,6 +433,7 @@ class FightScene:
         for pr in self.projectiles:
             draw_projectile(cv, pr)
         self.particles.draw(cv)
+        self.stage.draw_front(cv, self.t)   # folhagem da frente (emoldura a luta)
         self._draw_hud(cv)
         self._draw_messages(cv)
         # tremor de tela
@@ -527,7 +528,7 @@ class ResultScene:
         self.char = char
         self.tag = tag
         self.t = 0
-        self.stage = ForestStage()
+        self.stage = load_stage()
         self.pv = Fighter(char, C.WIDTH // 2, 1, None)
         self.pv.set_state(WIN)
         self.particles = fx.Particles()
