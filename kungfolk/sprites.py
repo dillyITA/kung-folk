@@ -338,3 +338,21 @@ def render(surf, fighter):
     if ss is not None and ss.draw(surf, fighter):
         return
     fighter.char.draw(surf, fighter)
+
+
+def draw_bust(surf, char, cx, cy, max_h=190, facing=1):
+    """Busto (cabeça + tronco) do frame de idle desenhado, p/ a tela de seleção.
+    Cai no retrato procedural se o personagem não tiver sprites."""
+    ss = getattr(char, 'sprites', None)
+    if ss is None or not ss.has('idle'):
+        char.portrait(surf, cx, cy, 1.4)
+        return
+    full = ss.anims['idle'][0]
+    fw, fh = full.get_size()
+    bh = max(1, int(fh * 0.66))                  # cabeça + tronco
+    bust = full.subsurface(pygame.Rect(0, 0, fw, bh)).copy()
+    s = max_h / bh
+    bust = pygame.transform.smoothscale(bust, (max(1, int(fw * s)), max(1, int(bh * s))))
+    if facing < 0:
+        bust = pygame.transform.flip(bust, True, False)
+    surf.blit(bust, bust.get_rect(center=(int(cx), int(cy))))

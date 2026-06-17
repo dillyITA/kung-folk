@@ -166,7 +166,9 @@ class SelectScene:
             rect = pygame.Rect(px, 120, panel_w, panel_h)
             pygame.draw.rect(surf, C.CREAM, rect)
             pygame.draw.rect(surf, C.INK, rect, 4)
-            ch.portrait(surf, rect.centerx, rect.y + 110, 1.4)
+            # busto desenhado (idle), os dois se encarando
+            sprites.draw_bust(surf, ch, rect.centerx, rect.y + 110,
+                              max_h=196, facing=1 if i == 0 else -1)
             fx.text(surf, ch.name, 28, (rect.centerx, rect.y + 230), C.INK)
             fx.text(surf, ch.title, 17, (rect.centerx, rect.y + 262), C.SEPIA)
             # cursores
