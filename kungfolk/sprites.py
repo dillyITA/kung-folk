@@ -148,17 +148,45 @@ def chroma_slice(path, tol=72, edge=28):
     return frames
 
 
+def slice_by_bounds(path, bounds):
+    """Fatia um strip usando as fronteiras [x, largura] exatas gravadas pelo
+    importador — robusto a vãos internos da figura. Recorta cada frame no bbox."""
+    import numpy as np
+    img = pygame.image.load(path)
+    pre = pygame.surfarray.array_alpha(img)
+    h = img.get_height()
+    frames = []
+    for x, w in bounds:
+        a = pre[x:x + w]
+        fg = a > 40
+        xs = np.where(fg.any(axis=1))[0]
+        ys = np.where(fg.any(axis=0))[0]
+        if not len(xs) or not len(ys):
+            continue
+        frames.append(img.subsurface(pygame.Rect(
+            x + int(xs[0]), int(ys[0]),
+            int(xs[-1] - xs[0] + 1), int(ys[-1] - ys[0] + 1))).copy())
+    return frames
+
+
 class SpriteSet:
     """Conjunto de animações carregadas para um personagem."""
 
     def __init__(self, folder):
         self.anims = {}            # nome -> [Surface, ...] já escalados
         self.foot = {}             # nome -> [y do "chão" relativo ao frame]
+        bounds = {}
+        jp = os.path.join(folder, 'sprites.json')
+        if os.path.exists(jp):
+            import json
+            with open(jp) as fh:
+                bounds = json.load(fh)
         raw = {}
         for name in ANIMS:
             p = os.path.join(folder, name + '.png')
             if os.path.exists(p):
-                fr = chroma_slice(p)
+                # fronteiras exatas (do importador) > re-fatiar por lacunas
+                fr = slice_by_bounds(p, bounds[name]) if name in bounds else chroma_slice(p)
                 if fr:
                     raw[name] = fr
         if not raw:

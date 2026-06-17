@@ -117,7 +117,7 @@ def main():
         labels.append((s + p) // 2)
     print('linhas detectadas:', len(labels))
 
-    made = []
+    made, bounds = [], {}
     for i, center in enumerate(labels):
         if i >= len(layout):
             print('  (linha %d sem nome no layout — ignorada)' % i)
@@ -147,9 +147,21 @@ def main():
         runs = reconcile(runs, count)
         frames = [_crop(img, alpha, r[0], r[1], a, b) for r in runs]
         frames = [f for f in frames if f is not None]
-        _save_strip(frames, os.path.join(out_dir, name + '.png'))
+        bounds[name] = _save_strip(frames, os.path.join(out_dir, name + '.png'))
         made.append('%s(%d)' % (name, len(frames)))
         print('  %-13s -> %d frames' % (name, len(frames)))
+
+    # grava as fronteiras exatas dos frames (merge com o que já existir, pois
+    # cada folha cobre só parte das animações do personagem)
+    import json
+    jp = os.path.join(out_dir, 'sprites.json')
+    meta = {}
+    if os.path.exists(jp):
+        with open(jp) as fh:
+            meta = json.load(fh)
+    meta.update(bounds)
+    with open(jp, 'w') as fh:
+        json.dump(meta, fh, indent=0)
 
     print('\nstrips salvos em %s:\n  %s' % (out_dir, '  '.join(made)))
     pygame.quit()
@@ -190,9 +202,10 @@ def _crop(img, alpha, x0, x1, ay, by):
 
 
 def _save_strip(frames, path):
-    """Empacota os frames num strip transparente, alinhados pela base."""
+    """Empacota os frames num strip transparente, alinhados pela base.
+    Devolve [[x, largura], ...] de cada frame (fronteiras exatas p/ o runtime)."""
     if not frames:
-        return
+        return []
     fw = [f.get_width() for f in frames]
     fh = [f.get_height() for f in frames]
     total_w = sum(fw) + GAP_PAD * (len(frames) + 1)
@@ -200,10 +213,13 @@ def _save_strip(frames, path):
     strip = pygame.Surface((total_w, total_h), pygame.SRCALPHA)
     x = GAP_PAD
     base = total_h - GAP_PAD
+    bounds = []
     for f in frames:
         strip.blit(f, (x, base - f.get_height()))
+        bounds.append([x, f.get_width()])
         x += f.get_width() + GAP_PAD
     pygame.image.save(strip, path)
+    return bounds
 
 
 if __name__ == '__main__':
