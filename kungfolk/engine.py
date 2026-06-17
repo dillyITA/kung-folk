@@ -126,6 +126,7 @@ class Fighter:
         self.state = IDLE
         self.frame = 0          # frames no estado atual
         self.anim = 0           # contador global de animação
+        self.walk_phase = 0.0   # distância acumulada — sincroniza o ciclo de andar
         self.attack = None
         self.hit_done = False
         self.stun = 0
@@ -187,6 +188,13 @@ class Fighter:
         return a and a.startup <= self.frame < a.startup + a.active
 
     def attack_rect(self):
+        # hitbox derivada da arte (ponta do golpe) quando há sprites; senão, a
+        # estática do frame data (boneco procedural).
+        ss = getattr(self.char, 'sprites', None)
+        if ss is not None:
+            r = ss.strike_rect(self)
+            if r is not None:
+                return r
         a = self.attack
         r = pygame.Rect(0, 0, a.hitbox[2], a.hitbox[3])
         r.center = (int(self.x + self.facing * a.hitbox[0]), int(self.y - a.hitbox[1]))
@@ -223,6 +231,7 @@ class Fighter:
     def update(self, inp):
         self.anim += 1
         self.frame += 1
+        self.walk_phase += abs(self.vx)
         self.hold_x = inp.dir_x
         if self.invuln > 0:
             self.invuln -= 1

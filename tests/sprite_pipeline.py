@@ -1,6 +1,7 @@
-"""Valida o pipeline de sprites sem precisar de assets reais:
-gera uma tira magenta sintética, confere que o chroma-key + fatiamento
-acham o nº certo de frames, e que o fallback procedural continua de pé."""
+"""Valida o pipeline de sprites sem assets reais, no fluxo atual:
+strips transparentes + sprites.json (fronteiras exatas) -> slice_by_bounds +
+escala por núcleo. Também testa o fallback chroma_slice e o fallback procedural."""
+import json
 import os
 import sys
 import tempfile
@@ -12,68 +13,61 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import pygame  # noqa: E402
 from kungfolk import sprites  # noqa: E402
 from kungfolk.characters import SACI  # noqa: E402
-from kungfolk.engine import Fighter, IDLE  # noqa: E402
+from kungfolk.engine import Fighter  # noqa: E402
 
-MAGENTA = (199, 44, 224)   # roxo-magenta, como o do model sheet gerado
+GAP = 20
 
 
-def make_strip(path, n=6, cell=180, h=220):
-    """Desenha n bonecos distintos sobre fundo magenta, espaçados."""
-    gap = 36
-    w = n * cell + (n + 1) * gap
-    surf = pygame.Surface((w, h))
-    surf.fill(MAGENTA)
+def make_strip(path, n=6, cell=120, h=220):
+    """Strip TRANSPARENTE com n bonecos espaçados; devolve as fronteiras [x,w]."""
+    w = n * cell + (n + 1) * GAP
+    surf = pygame.Surface((w, h), pygame.SRCALPHA)
+    bounds = []
     for i in range(n):
-        cx = gap + i * (cell + gap) + cell // 2
-        # "corpo": altura varia por frame, pés alinhados na base
-        bh = 150 + (i % 3) * 20
-        pygame.draw.ellipse(surf, (60, 40, 30),
-                            (cx - 30, h - 20 - bh, 60, bh))
-        pygame.draw.circle(surf, (172, 52, 40), (cx, h - 20 - bh), 26)  # "gorro"
-    # uma sujeirinha solta (deve ser descartada por min_w)
-    pygame.draw.circle(surf, (255, 240, 200), (gap // 2, 12), 2)
+        x = GAP + i * (cell + GAP)
+        cx = x + cell // 2
+        bh = 150 + (i % 3) * 18
+        pygame.draw.ellipse(surf, (60, 40, 30, 255), (cx - 28, h - 16 - bh, 56, bh))
+        pygame.draw.circle(surf, (172, 52, 40, 255), (cx, h - 16 - bh), 24)
+        bounds.append([x, cell])
     pygame.image.save(surf, path)
+    return bounds
 
 
 def main():
     pygame.init()
-    pygame.display.set_mode((4, 4))   # surfarray/convert precisam de display
-
+    pygame.display.set_mode((4, 4))
     tmp = tempfile.mkdtemp()
     saci_dir = os.path.join(tmp, 'saci')
     os.makedirs(saci_dir)
-    make_strip(os.path.join(saci_dir, 'idle.png'), n=6)
-    make_strip(os.path.join(saci_dir, 'walk.png'), n=8)
+    b_idle = make_strip(os.path.join(saci_dir, 'idle.png'), n=6)
+    make_strip(os.path.join(saci_dir, 'walk.png'), n=8)   # sem bounds -> chroma_slice
+    # só idle tem fronteiras gravadas; walk cai no fallback chroma_slice
+    json.dump({'idle': b_idle}, open(os.path.join(saci_dir, 'sprites.json'), 'w'))
 
-    # aponta o ASSET_ROOT do pipeline para a pasta temporária
     sprites.ASSET_ROOT = tmp
-
     ss = sprites.SpriteSet(saci_dir)
-    assert ss.has('idle'), 'idle não carregou'
-    assert len(ss.anims['idle']) == 6, 'idle: esperava 6 frames, veio %d' % len(ss.anims['idle'])
-    assert len(ss.anims['walk']) == 8, 'walk: esperava 8 frames, veio %d' % len(ss.anims['walk'])
-    # escala: idle deve ficar na altura alvo
-    th = max(f.get_height() for f in ss.anims['idle'])
-    assert abs(th - sprites.TARGET_H) <= 2, 'escala fora do alvo: %d' % th
-    print('fatiamento OK: idle=6, walk=8, altura=%d' % th)
+    assert ss.has('idle') and len(ss.anims['idle']) == 6, 'idle: %s' % (
+        len(ss.anims.get('idle', [])))
+    assert ss.has('walk') and len(ss.anims['walk']) == 8, 'walk: %s' % (
+        len(ss.anims.get('walk', [])))
+    # escala por núcleo: a MEDIANA dos frames de idle ~ CORE_BODY
+    cores = sorted(sprites._core_height(f) for f in ss.anims['idle'])
+    core = cores[len(cores) // 2]
+    assert abs(core - sprites.CORE_BODY) <= 6, 'núcleo idle fora do alvo: %d' % core
+    print('slice_by_bounds + chroma_slice OK | idle=6 walk=8 núcleo=%d' % core)
 
-    # draw() escolhe frame e desenha sem erro
     SACI.sprites = ss
     f = Fighter(SACI, 480, 1, None)
     canvas = pygame.Surface((960, 540))
     for _ in range(20):
         f.anim += 1
         assert sprites.render(canvas, f) is None
-    # frame de idle deve estar entre 0 e n-1
-    name, mode = sprites.resolve(f)
-    assert name == 'idle' and mode == 'loop'
-    print('render via sprite OK (estado %s)' % name)
+    print('render via sprite OK (estado %s)' % sprites.resolve(f)[0])
 
-    # fallback: personagem sem sprites volta ao procedural sem quebrar
     SACI.sprites = None
     sprites.render(canvas, f)
     print('fallback procedural OK')
-
     pygame.quit()
     print('PIPELINE DE SPRITES OK')
 

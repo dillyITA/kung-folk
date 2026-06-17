@@ -131,10 +131,13 @@ def chroma_slice(path, tol=72, edge=28):
     """Carrega um strip (fundo magenta OU já transparente) e devolve a lista de
     frames recortados — cada um com alpha e cortado no bounding box."""
     import numpy as np
-    # NÃO usar convert_alpha(): em algumas combinações de SDL/macOS (cocoa) o
-    # blit de surfaces convertidas sai como bloco branco. A surface crua do PNG
-    # já traz alpha e blita corretamente.
+    # NÃO usar convert_alpha() em PNG já transparente: em alguns SDL/macOS o blit
+    # da surface convertida sai branco. A surface crua do PNG já traz alpha. Só
+    # convertemos quando o PNG NÃO tem canal alpha (ex.: magenta chapado solto —
+    # caso raro; o fluxo normal usa o importador, que gera strips transparentes).
     img = pygame.image.load(path)
+    if img.get_masks()[3] == 0:
+        img = img.convert_alpha()
     w, h = img.get_size()
     pre = pygame.surfarray.array_alpha(img)                       # (w, h)
     if (pre < 16).mean() > 0.04:                                  # já vem keyado
@@ -157,6 +160,29 @@ def chroma_slice(path, tol=72, edge=28):
         del av
         frames.append(sub.subsurface(pygame.Rect(0, y0, x1 - x0, y1 - y0)).copy())
     return frames
+
+
+def _strike_rect_for(frames):
+    """Calcula a zona de impacto (punho/pé) na ponta da figura, no frame de
+    impacto. Devolve (dx, alt, w, h) relativo ao midbottom (f.x, f.y)."""
+    import numpy as np
+    imp = round(0.66 * (len(frames) - 1))
+    img = frames[imp]
+    w, h = img.get_size()
+    fg = pygame.surfarray.array_alpha(img) > 40
+    xs = np.where(fg.any(axis=1))[0]
+    if not len(xs):
+        return None
+    cw = int(xs[-1] - xs[0] + 1)
+    sw = int(min(64, max(36, 0.36 * cw)))
+    fwd = int(xs[-1])
+    x0 = max(0, fwd - sw)
+    ys = np.where(fg[x0:fwd + 1].any(axis=0))[0]
+    if not len(ys):
+        return None
+    y0, y1 = int(ys[0]), int(ys[-1])
+    cx, cy = (x0 + fwd) / 2.0, (y0 + y1) / 2.0
+    return (cx - w / 2.0, h - 6 - cy, sw, max(22, y1 - y0))
 
 
 def _core_height(surf):
@@ -221,6 +247,13 @@ class SpriteSet:
             med = cores[len(cores) // 2] or 1
             scale = POSE_CORE.get(name, CORE_BODY) / med
             self.anims[name] = [self._scaled(f, scale) for f in fr]
+        # hitbox derivada da arte: a ponta (punho/pé) no frame de impacto
+        self.strike = {}
+        for name in ('punch', 'crouch_punch', 'kick', 'air_kick', 'special_k'):
+            if name in self.anims:
+                s = _strike_rect_for(self.anims[name])
+                if s:
+                    self.strike[name] = s
 
     @staticmethod
     def _scaled(f, s):
@@ -230,19 +263,42 @@ class SpriteSet:
     def has(self, name):
         return name in self.anims
 
+    def strike_rect(self, f):
+        """Hitbox alinhada à arte (ponta do golpe), espelhada pelo facing.
+        Devolve None se a animação não tiver golpe corpo-a-corpo mapeado."""
+        if f.attack is None:
+            return None
+        s = self.strike.get(_attack_anim(f.attack))
+        if s is None:
+            return None
+        dx, alt, sw, sh = s
+        r = pygame.Rect(0, 0, sw, sh)
+        r.center = (int(f.x + f.facing * dx), int(f.y - alt))
+        return r
+
     def _index(self, f, name, mode):
         frames = self.anims[name]
         n = len(frames)
         if mode == 'attack' and f.attack is not None:
+            # mapeia por FASE: a extensão (frame de impacto) coincide com a
+            # janela ativa da hitbox, então o golpe conecta quando ele estende.
             a = f.attack
-            total = max(1, a.startup + a.active + a.recovery)
-            return min(n - 1, int(f.frame / total * n))
+            imp = round(0.66 * (n - 1))
+            if f.frame < a.startup:
+                return min(imp, round(imp * f.frame / max(1, a.startup)))
+            if f.frame < a.startup + a.active:
+                return imp
+            t = (f.frame - a.startup - a.active) / max(1, a.recovery)
+            return min(n - 1, imp + round((n - 1 - imp) * min(1.0, t)))
         if mode == 'jump':
             if f.vy < -2:
                 return 0
             return min(n - 1, 1) if abs(f.vy) <= 2 else min(n - 1, 2)
         if mode == 'progress':
             return min(n - 1, int(f.frame / 30 * n))
+        if name == 'walk':
+            # ciclo sincronizado à distância andada (pé não desliza)
+            return int(f.walk_phase / 13.0) % n
         fps = ANIMS[name].get('fps', 8)
         return (f.anim // max(1, 60 // fps)) % n
 
